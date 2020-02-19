@@ -1,10 +1,15 @@
 package com.trial.retrofitfile
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.DocumentsContract
 import android.util.Log
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toFile
 import androidx.lifecycle.lifecycleScope
 import kotlinx.android.synthetic.main.activity_main.*
@@ -23,6 +28,32 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 import java.io.File
+
+
+/*
+* MY GOAL
+* =============
+* Get file from android
+* Upload that file to server using retrofit
+* Download File from server
+* Save that file to the local storage
+* */
+
+
+/*
+* Facing two main problems
+* 1. Problem getting file using intent
+*    => Uri lacks 'file' scheme:
+*
+* 2. Uploading that file using retrofit
+*
+* Also I need to download and save file using retrofit.
+* I am not sure if there would be a problem too.
+*
+* It would be very grateful if you can help me with these problems
+* */
+
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -56,10 +87,10 @@ class MainActivity : AppCompatActivity() {
 
 
     fun getFileUri(){
-        val intent = Intent(Intent.ACTION_GET_CONTENT)
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
         //intent.addCategory(Intent.CATEGORY_OPENABLE)
         intent.type = "*/*"
-        intent.setType("application/pdf")
+        intent.type = "application/pdf"
         startActivityForResult(intent, DEVICE_PATH)
     }
 
@@ -68,8 +99,8 @@ class MainActivity : AppCompatActivity() {
 
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == DEVICE_PATH && resultCode == Activity.RESULT_OK) {
-            data?.data?.let {
-                Log.d("PATHURL", "${it.path} ${File(it.path!!).name}")
+            data?.data?.let {uri ->
+                Log.d("PATHURL", "${uri.path} ${File(uri.path!!).name}")
 
                 lifecycleScope.launch {
                     //val api_key =  RequestBody.create(MediaType.parse("text/plain"), "somevalue")
@@ -78,8 +109,8 @@ class MainActivity : AppCompatActivity() {
                         val tool_uid = "PR5".toRequestBody("text/plain".toMediaTypeOrNull())
 
 
-                        val path = it.path!!
-                        val file: File = it.toFile()
+                        val a = getPath(this@MainActivity, uri)
+                        val file: File = File(uri.path!!)
 
                         val requestFile: RequestBody = file.asRequestBody("application/pdf".toMediaTypeOrNull())
                         val multipartBody: MultipartBody.Part = MultipartBody.Part.createFormData("input", file.name, requestFile)
@@ -92,13 +123,42 @@ class MainActivity : AppCompatActivity() {
 
 
 
-                        Log.d("imin", "$path")
+
+                        Log.d("PATHURL", "${uri.path}")
                     }catch (ex: Exception){
-                        Log.d("fatal", "${ex.message}")
+                        Log.d("PATHURL", "fatal ${ex.message}")
                     }
                 }
             }
         }
+    }
+
+    fun getPath(context: Context, uri: Uri): String? {
+        // DocumentProvider
+        if (DocumentsContract.isDocumentUri(context, uri)) {
+            System.out.println("getPath() uri: " + uri.toString())
+            System.out.println("getPath() uri authority: " + uri.getAuthority())
+            System.out.println("getPath() uri path: " + uri.getPath())
+            // ExternalStorageProvider
+            if ("com.android.externalstorage.documents" == uri.getAuthority()) {
+                val docId = DocumentsContract.getDocumentId(uri)
+                val split = docId.split(":").toTypedArray()
+                val type = split[0]
+                println("getPath() docId: " + docId + ", split: " + split.size + ", type: " + type)
+                // This is for checking Main Memory
+                return if ("primary".equals(type, ignoreCase = true)) {
+                    if (split.size > 1) {
+                        Environment.getExternalStorageDirectory().toString() + "/" + split[1] + "/"
+                    } else {
+                        Environment.getExternalStorageDirectory().toString() + "/"
+                    }
+                    // This is for checking SD Card
+                } else {
+                    "storage" + "/" + docId.replace(":", "/")
+                }
+            }
+        }
+        return null
     }
 }
 
